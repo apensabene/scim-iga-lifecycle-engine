@@ -1,0 +1,18 @@
+# Environment & Secrets
+.env
+*.pem
+*.jwk
+*.key
+*.db
+*.sqlite3
+
+# Generated Compliance Reports
+reports/
+*.csv
+audit_certification_*.json
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
