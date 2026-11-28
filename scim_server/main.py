@@ -53,11 +53,16 @@ app = FastAPI(title="SCIM 2.0 Provisioning & IGA Service Provider", version="1.0
 
 
 def verify_bearer(authorization: Optional[str] = Header(default=None)) -> None:
-    expected = os.environ.get("SCIM_BEARER_TOKEN", "")
+    # Fail closed: this check must not depend on the lifespan startup guard having run.
+    expected = os.environ.get("SCIM_BEARER_TOKEN", "").strip()
+    if not expected:
+        raise PermissionError("Invalid Bearer token")
     if not authorization or not authorization.startswith("Bearer "):
         raise PermissionError("Missing Bearer token")
     token = authorization.split(" ", 1)[1].strip()
-    if not secrets.compare_digest(token, expected):
+    if not token:
+        raise PermissionError("Missing Bearer token")
+    if not secrets.compare_digest(token.encode("utf-8"), expected.encode("utf-8")):
         raise PermissionError("Invalid Bearer token")
 
 
