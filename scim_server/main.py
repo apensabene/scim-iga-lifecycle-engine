@@ -52,7 +52,20 @@ async def lifespan(app: FastAPI):
 app = FastAPI(title="SCIM 2.0 Provisioning & IGA Service Provider", version="1.0.0", lifespan=lifespan)
 
 
-def verify_bearer(authorization: Optional[str] = Header(default=None)) -> None:
+class InsecureTransportError(Exception):
+    """Raised when a bearer-protected endpoint is reached over plaintext HTTP."""
+
+
+def _insecure_http_allowed() -> bool:
+    # Explicit opt-in for local development only; never enable on a reachable listener.
+    return os.environ.get("SCIM_ALLOW_INSECURE_HTTP", "").strip().lower() in {"1", "true", "yes"}
+
+
+def verify_bearer(request: Request, authorization: Optional[str] = Header(default=None)) -> None:
+    # Refuse to process credentials received over plaintext HTTP. Behind a TLS terminator,
+    # run uvicorn with --proxy-headers and --forwarded-allow-ips so the scheme is https.
+    if request.url.scheme != "https" and not _insecure_http_allowed():
+        raise InsecureTransportError("HTTPS is required")
     # Fail closed: this check must not depend on the lifespan startup guard having run.
     expected = os.environ.get("SCIM_BEARER_TOKEN", "").strip()
     if not expected:
@@ -71,6 +84,15 @@ async def auth_exception_handler(_: Request, exc: PermissionError):
     return JSONResponse(
         status_code=401,
         content=scim_error_payload(401, str(exc)),
+        media_type=SCIM_CONTENT_TYPE,
+    )
+
+
+@app.exception_handler(InsecureTransportError)
+async def insecure_transport_handler(_: Request, exc: InsecureTransportError):
+    return JSONResponse(
+        status_code=403,
+        content=scim_error_payload(403, str(exc)),
         media_type=SCIM_CONTENT_TYPE,
     )
 

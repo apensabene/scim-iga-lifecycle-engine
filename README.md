@@ -67,12 +67,18 @@ pip install -r requirements.txt
 ### 2. Run the SCIM 2.0 Provisioning Server
 ```bash
 export SCIM_BEARER_TOKEN="$(python -c 'import secrets; print(secrets.token_urlsafe(32))')"
-uvicorn scim_server.main:app --host 0.0.0.0 --port 8000
+uvicorn scim_server.main:app --host 0.0.0.0 --port 8443 \
+  --ssl-keyfile /path/to/server.key --ssl-certfile /path/to/server.crt
 ```
 
-Test provisioning a SCIM user locally:
+The service refuses bearer-authenticated requests received over plaintext HTTP. If TLS is terminated by a
+reverse proxy, bind Uvicorn to a loopback or private interface and start it with `--proxy-headers` and
+`--forwarded-allow-ips` set to the proxy address. For isolated local development only, run
+`SCIM_ALLOW_INSECURE_HTTP=true uvicorn scim_server.main:app --host 127.0.0.1 --port 8000`.
+
+Test provisioning a SCIM user (use `--cacert` for a private CA):
 ```bash
-curl -X POST http://localhost:8000/scim/v2/Users \
+curl -X POST https://localhost:8443/scim/v2/Users \
   -H "Authorization: Bearer $SCIM_BEARER_TOKEN" \
   -H "Content-Type: application/scim+json" \
   -d '{
